@@ -1,0 +1,121 @@
+#+TITLE: smls - A server for the ML tools
+#+AUTHOR: Stewart V. Wright
+#+DATE: 2022/02/02
+#+LASTMOD: 2022/03/14
+#+EMAIL: stewart@vifortech.com
+#+LANGUAGE:  en
+#+OPTIONS:   H:3 num:nil toc:t \n:nil ::t |:t ^:t -:t f:t *:t
+# #+OPTIONS:   tex:t d:(HIDE) tags:not-in-toc
+#+STARTUP:   num
+
+A simple API framework for serving machine learning functions.
+
+* Why?
+
+This is actually based on the insights from Mark Watson's [[https://leanpub.com/lovinglisp][Loving Common Lisp, or
+the Savvy Programmer's Secret Weapon]]. In this book the Mark builds a web
+services interface to [[https://spacy.io/][spaCy]]. It took a while for me to understand why we would
+do this. Or at least a reason why *I* would do this:
+- Why run python in addition to lisp?
+- Why run a webserver instead of just using something like ~py4cl~?
+- Why not build a [[https://www.cliki.net/ffi][FFI]] linking to the compiled tools directly?
+
+
+Then I had an epiphany.  This approach makes sense for me because:
+- I want to push my ML calculations onto specialist hardware (think cloud GPUs,
+  etc.), that can scale, so I'm not going to want to be running my analysis code
+  on those machines, so load-balancing can handle a lot of what I need for async
+  work (think embeddings and the like)
+- I don't want to spend my time re-implementing all the (bug tested) work
+  someone else has done each time there is a new version of Tensorflow, etc.
+- ...and of course Tensorflow, Pytorch, etc. /aren't/ actually written in
+  python. The Python code is a wrapper for the C++ code, so there's not a whole
+  lot of slowdown by putting python between my code and the tools I'm using.
+- ...and I write code in python too so this won't be too far from where I (and
+  collaborators) spend a lot of time.
+
+* Usage
+
+Starting the server is as simple as running the following command
+
+#+begin_src shell
+gunicorn sample:app
+#+end_src
+
+(This is of course assuming you've activated your virtual environment!)
+
+Alternatively you can simply access the models by importing them into your
+python session:
+
+#+begin_src python
+  import smls
+  tf = smls.ml_services.get("TFSentenceEncoder")
+  tf.run("The quick brown fox jumped over the lazy dog".split(" "))
+#+end_src
+
+* Installation
+
+The server uses various python bindings, so we need to install the required
+libraries, preferably in a virtual environment, 'cos you know...Python...
+
+Following the standard way of doing this in python, set up a virtual environment
+(in the ~smls~ directory) and install dependencies:
+
+#+begin_src shell
+  python -m venv --prompt smls venv
+  source venv/bin/activate
+  pip install -r requirements.txt
+#+end_src
+
+* General discussion
+
+This package uses a couple of concepts on which I thought it was useful to
+elaborate.
+
+** Object factories
+
+Machine learning models can be large. Rather than (re)loading a model each time
+I create a new instance/variable I'm using the object factory approach. You can
+read about it at [[https://realpython.com/factory-method-python][Real Python]] but effectively for situations where we can re-use
+and object, so a pre-trained model for example, we cache the object and just
+return a pointer to the same object each time it's requested.
+
+An example is the following:
+
+#+begin_src python
+  import smls
+
+  # Note that this command takes some time to run as it needs to load the
+  # TensorFlow model
+  tf1 = smls.ml_services.get("TFSentenceEncoder")
+
+  # 2022-03-14 03:14:15.926535: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX2 FMA
+  # To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+
+
+  # However this command runs instantaneously and without the TensorFlow notice,
+  # because we're not actually loading the model.
+  tf2 = smls.ml_services.get("TFSentenceEncoder")
+
+  # And both tf1 and tf2 are pointing to the same object in memory.
+  id(tf1) == id(tf2)
+
+  # Out[4]: True
+#+end_src
+
+There are some wrinkles in this approach as the default way of doing this
+assumes that the ~_instance~ that is built in, say, [[smls/tensorflow.py][TFSentenceEncoderBuilder]]
+doesn't take into account any model configuration options. That's been solved in
+other examples that have been implemented in this code base.
+
+* Author
+
++ Stewart V. Wright (stewart@vifortech.com)
+
+* Copyright
+
+Copyright (c) 2022 Stewart V. Wright (stewart@vifortech.com)
+
+* License
+
+Licensed under the MIT License.
