@@ -39,7 +39,7 @@ Then I had an epiphany.  This approach makes sense for me because:
 Starting the server is as simple as running the following command
 
 #+begin_src shell
-gunicorn sample:app
+gunicorn server:app
 #+end_src
 
 (This is of course assuming you've activated your virtual environment!)
@@ -51,6 +51,19 @@ python session:
   import smls
   tf = smls.ml_services.get("TFSentenceEncoder")
   tf.run("The quick brown fox jumped over the lazy dog".split(" "))
+#+end_src
+
+** A worked example...
+
+In one terminal
+#+begin_src shell
+  export TFHUB_CACHE_DIR=$(pwd)
+  gunicorn server:app
+#+end_src
+
+In another terminal...
+#+begin_src
+  curl -d "message=['Hello world!', 'How are you today?']" -X POST http://localhost:8000/embed | jq
 #+end_src
 
 * Installation
